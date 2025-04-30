@@ -70,6 +70,12 @@ chmod +x generate_tls.sh
 
 ## 🐳 Docker Compose Setup
 
+###  Install Docker
+
+```bash
+apt install docker-compose
+```
+
 Here's the `docker-compose.yml` to run 3 MongoDB containers configured as a replica set using TLS:
 
 ```yaml
