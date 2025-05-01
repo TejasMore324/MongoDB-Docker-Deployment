@@ -38,7 +38,7 @@ openssl genrsa -out ca.key 4096
 openssl req -x509 -new -nodes -key ca.key -sha256 -days 365 \
   -out ca.crt -subj "/CN=MyMongoCA"
 
-# Step 2: Generate and Sign Certificates for each MongoDB container
+# Step 2: Generate and Sign Certificates for each MongoDB container including arbiter
 for i in 1 2 3; do
   openssl req -newkey rsa:2048 -nodes -keyout mongo${i}.key -out mongo${i}.csr \
     -subj "/CN=mongo${i}"
@@ -51,9 +51,22 @@ for i in 1 2 3; do
 
   cat mongo${i}.crt mongo${i}.key > mongo${i}.pem
 
-  # Clean up temporary files
   rm mongo${i}.csr mongo${i}-extfile.cnf
 done
+
+# Arbiter certificate
+openssl req -newkey rsa:2048 -nodes -keyout mongo-arbiter.key -out mongo-arbiter.csr \
+  -subj "/CN=mongo-arbiter"
+
+echo "subjectAltName=DNS:mongo-arbiter" > mongo-arbiter-extfile.cnf
+
+openssl x509 -req -in mongo-arbiter.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out mongo-arbiter.crt -days 365 -sha256 \
+  -extfile mongo-arbiter-extfile.cnf
+
+cat mongo-arbiter.crt mongo-arbiter.key > mongo-arbiter.pem
+
+rm mongo-arbiter.csr mongo-arbiter-extfile.cnf
 
 echo "TLS files generated in the tls/ folder."
 
@@ -69,12 +82,6 @@ chmod +x generate_tls.sh
 ---
 
 ## 🐳 Docker Compose Setup
-
-###  Install Docker
-
-```bash
-apt install docker-compose
-```
 
 Here's the `docker-compose.yml` to run 3 MongoDB containers configured as a replica set using TLS:
 
@@ -145,10 +152,34 @@ services:
         "--tlsCAFile=/etc/ssl/mongo/ca.crt"
       ]
 
+    mongo-arbiter:
+    image: mongo:6.0
+    container_name: mongo-arbiter
+    hostname: mongo-arbiter
+    ports:
+      - 27020:27017
+    volumes:
+      - mongo-arbiter-data:/data/db
+      - ./tls:/etc/ssl/mongo:ro
+    networks:
+      - mongo-cluster
+    command:
+      [
+        "mongod",
+        "--replSet=rs0",
+        "--bind_ip_all",
+        "--tlsMode=requireTLS",
+        "--tlsCertificateKeyFile=/etc/ssl/mongo/mongo-arbiter.pem",
+        "--tlsCAFile=/etc/ssl/mongo/ca.crt"
+      ]
+    
+
 volumes:
   mongo1-data:
   mongo2-data:
   mongo3-data:
+  mongo-arbiter-data:
+
 
 networks:
   mongo-cluster:
@@ -193,9 +224,11 @@ rs.initiate({
   members: [
     { _id: 0, host: "mongo1:27017" },
     { _id: 1, host: "mongo2:27017" },
-    { _id: 2, host: "mongo3:27017" }
+    { _id: 2, host: "mongo3:27017" },
+    { _id: 3, host: "mongo-arbiter:27017", arbiterOnly: true }
   ]
 })
+
 ```
 
 Check status:
