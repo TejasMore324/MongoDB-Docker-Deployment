@@ -152,7 +152,7 @@ services:
         "--tlsCAFile=/etc/ssl/mongo/ca.crt"
       ]
 
-    mongo-arbiter:
+  mongo-arbiter:
     image: mongo:6.0
     container_name: mongo-arbiter
     hostname: mongo-arbiter
@@ -170,9 +170,9 @@ services:
         "--bind_ip_all",
         "--tlsMode=requireTLS",
         "--tlsCertificateKeyFile=/etc/ssl/mongo/mongo-arbiter.pem",
-        "--tlsCAFile=/etc/ssl/mongo/ca.crt"
+        "--tlsCAFile=/etc/ssl/mongo/ca.crt",
+        "--arbiterOnly"
       ]
-    
 
 volumes:
   mongo1-data:
@@ -180,11 +180,9 @@ volumes:
   mongo3-data:
   mongo-arbiter-data:
 
-
 networks:
   mongo-cluster:
     driver: bridge
-
 ```
 
 ---
